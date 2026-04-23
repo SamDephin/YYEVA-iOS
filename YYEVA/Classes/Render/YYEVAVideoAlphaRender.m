@@ -4,6 +4,11 @@
 //
 //  Created by guoyabin on 2022/4/21.
 //
+//  Modified by SamDephin on 2026/4/23.
+//  Changes: Added NULL check before CFRelease in dealloc to prevent crash;
+//           Added error logging for Metal library and pipeline creation.
+//  Licensed under the Apache License, Version 2.0.
+//
 
 #import "YYEVAVideoAlphaRender.h"
 #import "YYEVAAssets.h"

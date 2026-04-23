@@ -4,6 +4,11 @@
 //
 //  Created by guoyabin on 2022/4/21.
 //
+//  Modified by SamDephin on 2026/4/23.
+//  Changes: Added per-loop completion callback (didLoopCompletedWithRemainingCount:);
+//           Used __weak/__strong pattern in dispatch_async to prevent retain cycle.
+//  Licensed under the Apache License, Version 2.0.
+//
 
 #import "YYEVAPlayer.h"
 #import "IYYEVAVideoRenderProtol.h"

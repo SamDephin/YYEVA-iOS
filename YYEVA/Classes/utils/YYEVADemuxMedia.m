@@ -4,6 +4,10 @@
 //
 //  Created by guoyabin on 2022/4/7.
 //
+//  Modified by SamDephin on 2026/4/23.
+//  Changes: Added 50MB max decompression size limit for zlib inflate (zip bomb protection).
+//  Licensed under the Apache License, Version 2.0.
+//
 
 #import "YYEVADemuxMedia.h"
 #import <zlib.h>

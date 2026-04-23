@@ -4,6 +4,10 @@
 //
 //  Created by guoyabin on 2022/4/21.
 //  播放器入口
+//
+//  Modified by SamDephin on 2026/4/23.
+//  Changes: Added didLoopCompletedWithRemainingCount: delegate method.
+//  Licensed under the Apache License, Version 2.0.
 
 #import <Foundation/Foundation.h>
 #import "YYEVACommon.h"

@@ -4,6 +4,13 @@
 //
 //  Created by guoyabin on 2022/4/13.
 //
+//  Modified by SamDephin on 2026/4/23.
+//  Changes: Replaced @synchronized with pthread_mutex_t for render performance;
+//           Moved delegate calls outside mutex lock to prevent deadlock;
+//           Added CGSizeZero guard to prevent division by zero;
+//           Added 50MB max decompression limit for zlib data.
+//  Licensed under the Apache License, Version 2.0.
+//
 
 #import "YYEVAAssets.h"
 #import "YYEVADemuxMedia.h"

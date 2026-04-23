@@ -4,6 +4,10 @@
 //
 //  Created by guoyabin on 2022/4/7.
 //
+//  Modified by SamDephin on 2026/4/23.
+//  Changes: Removed static keyword from vertexData array for thread safety.
+//  Licensed under the Apache License, Version 2.0.
+//
 
 #import "YYEVAEffectInfo.h"
 #import "YSVideoMetalUtils.h"

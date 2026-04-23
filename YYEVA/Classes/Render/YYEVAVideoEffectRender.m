@@ -4,6 +4,12 @@
 //
 //  Created by guoyabin on 2022/4/21.
 //
+//  Modified by SamDephin on 2026/4/23.
+//  Changes: Replaced UIImageView+renderInContext with direct CGContext drawing
+//           to reduce memory; Added error logging for Metal pipeline creation;
+//           Fixed AspectFill rendering to correctly crop and center.
+//  Licensed under the Apache License, Version 2.0.
+//
 
 #import "YYEVAVideoEffectRender.h"
 #import "YYEVAAssets.h"

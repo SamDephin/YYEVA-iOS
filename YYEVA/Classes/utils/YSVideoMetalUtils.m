@@ -4,6 +4,10 @@
 //
 //  Created by guoyabin on 2021/7/15.
 //
+//  Modified by SamDephin on 2026/4/23.
+//  Changes: Removed hardcoded fillMode override to respect caller's parameter.
+//  Licensed under the Apache License, Version 2.0.
+//
 #import "YSVideoMetalUtils.h"
 #import <AVFoundation/AVFoundation.h>
 @import MetalKit;

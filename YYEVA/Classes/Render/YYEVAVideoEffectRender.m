@@ -10,7 +10,7 @@
 #include "YYEVAVideoShareTypes.h"
 #import "YYEVAEffectInfo.h"
 #import "YSVideoMetalUtils.h"
-#import <UIKit/UIImageView.h>
+#import <UIKit/UIKit.h>
 
 extern matrix_float3x3 kColorConversion601FullRangeMatrix;
 extern vector_float3 kColorConversion601FullRangeOffset;
@@ -471,7 +471,7 @@ extern vector_float3 kColorConversion601FullRangeOffset;
         CGFloat lowRatio = MIN( drawableSize.width / containerSize.width , drawableSize.height / containerSize.height);
         CGFloat realWidth = 0.0;
         CGFloat realHeight = 0.0;
-        
+
         switch (videoFillMode) {
             case YYEVAContentMode_ScaleToFill:
                 realWidth =   containerSize.width;
@@ -489,37 +489,44 @@ extern vector_float3 kColorConversion601FullRangeOffset;
                 break;
         }
         
-        UIImageView *imgView;
-          
         switch (fillMode) {
             case YYEVAEffectSourceImageFillModeAspectFit:
             {
-                imgView = [[UIImageView alloc] initWithFrame:CGRectMake(0, 0, realWidth, realHeight)];
-                imgView.contentMode = UIViewContentModeScaleAspectFit;
-                imgView.image = image;
-                imgView.clipsToBounds = YES;
-                UIGraphicsBeginImageContextWithOptions(imgView.frame.size, NO, [UIScreen mainScreen].scale);
-                [imgView.layer renderInContext:UIGraphicsGetCurrentContext()];
+                UIGraphicsBeginImageContextWithOptions(CGSizeMake(realWidth, realHeight), NO, [UIScreen mainScreen].scale);
+                CGContextRef context = UIGraphicsGetCurrentContext();
+                CGRect drawRect = AVMakeRectWithAspectRatioInsideRect(image.size, CGRectMake(0, 0, realWidth, realHeight));
+                [image drawInRect:drawRect];
                 UIImage *snapshotImage = UIGraphicsGetImageFromCurrentImageContext();
                 UIGraphicsEndImageContext();
                 image = snapshotImage;
             }
-               
                 break;
 
             case YYEVAEffectSourceImageFillModeAspectFill:
             {
-                imgView = [[UIImageView alloc] initWithFrame:CGRectMake(0, 0, realWidth, realHeight)];
-                imgView.contentMode = UIViewContentModeScaleAspectFill;
-                imgView.image = image;
-                imgView.clipsToBounds = YES;
-                UIGraphicsBeginImageContextWithOptions(imgView.frame.size, NO, [UIScreen mainScreen].scale);
-                [imgView.layer renderInContext:UIGraphicsGetCurrentContext()];
+                UIGraphicsBeginImageContextWithOptions(CGSizeMake(realWidth, realHeight), NO, [UIScreen mainScreen].scale);
+                CGContextRef fillContext = UIGraphicsGetCurrentContext();
+                CGContextSaveGState(fillContext);
+                CGContextClipToRect(fillContext, CGRectMake(0, 0, realWidth, realHeight));
+                // Calculate AspectFill rect: scale to fill, center, crop excess
+                CGFloat imageAspect = image.size.width / image.size.height;
+                CGFloat targetAspect = realWidth / realHeight;
+                CGRect drawRect;
+                if (imageAspect > targetAspect) {
+                    // Image is wider — match height, crop sides
+                    CGFloat scaledWidth = realHeight * imageAspect;
+                    drawRect = CGRectMake((realWidth - scaledWidth) / 2.0, 0, scaledWidth, realHeight);
+                } else {
+                    // Image is taller — match width, crop top/bottom
+                    CGFloat scaledHeight = realWidth / imageAspect;
+                    drawRect = CGRectMake(0, (realHeight - scaledHeight) / 2.0, realWidth, scaledHeight);
+                }
+                [image drawInRect:drawRect];
+                CGContextRestoreGState(fillContext);
                 UIImage *snapshotImage = UIGraphicsGetImageFromCurrentImageContext();
                 UIGraphicsEndImageContext();
                 image = snapshotImage;
             }
-                
                 break;
             default:
                 break;
@@ -617,7 +624,12 @@ extern vector_float3 kColorConversion601FullRangeOffset;
 - (id<MTLRenderPipelineState>)mergeRenderPipelineState
 {
     if (!_mergeRenderPipelineState) {
-        id<MTLLibrary> library = [_device newLibraryWithFile:[self metalFilePath] error:nil];
+        NSError *error = nil;
+        id<MTLLibrary> library = [_device newLibraryWithFile:[self metalFilePath] error:&error];
+        if (!library) {
+            NSLog(@"YYEVA: mergeRenderPipelineState failed to load metallib: %@", error);
+            return nil;
+        }
         id<MTLFunction> vertexFunction = [library newFunctionWithName:@"elementVertexShader"];
         id<MTLFunction> fragmentFunction = [library newFunctionWithName:@"elementFragmentSharder"];
         
@@ -632,7 +644,10 @@ extern vector_float3 kColorConversion601FullRangeOffset;
         renderPipelineDescriptor.colorAttachments[0].sourceAlphaBlendFactor =  MTLBlendFactorSourceAlpha;
         renderPipelineDescriptor.colorAttachments[0].destinationRGBBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
         renderPipelineDescriptor.colorAttachments[0].destinationAlphaBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
-        _mergeRenderPipelineState = [_device newRenderPipelineStateWithDescriptor:renderPipelineDescriptor error:nil];
+        _mergeRenderPipelineState = [_device newRenderPipelineStateWithDescriptor:renderPipelineDescriptor error:&error];
+        if (!_mergeRenderPipelineState) {
+            NSLog(@"YYEVA: mergeRenderPipelineState creation failed: %@", error);
+        }
     }
     return _mergeRenderPipelineState;
 }
@@ -640,7 +655,12 @@ extern vector_float3 kColorConversion601FullRangeOffset;
 - (id<MTLRenderPipelineState>)defaultRenderPipelineState
 {
     if (!_defaultRenderPipelineState) {
-        id<MTLLibrary> library = [_device newLibraryWithFile:[self metalFilePath] error:nil];
+        NSError *error = nil;
+        id<MTLLibrary> library = [_device newLibraryWithFile:[self metalFilePath] error:&error];
+        if (!library) {
+            NSLog(@"YYEVA: defaultRenderPipelineState failed to load metallib: %@", error);
+            return nil;
+        }
         id<MTLFunction> vertexFunction = [library newFunctionWithName:@"maskVertexShader"];
         id<MTLFunction> fragmentFunction = [library newFunctionWithName:@"maskFragmentSharder"];
         
@@ -656,7 +676,10 @@ extern vector_float3 kColorConversion601FullRangeOffset;
         renderPipelineDescriptor.colorAttachments[0].destinationRGBBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
         renderPipelineDescriptor.colorAttachments[0].destinationAlphaBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
         renderPipelineDescriptor.colorAttachments[0].pixelFormat = _mtkView.colorPixelFormat;
-        _defaultRenderPipelineState = [_device newRenderPipelineStateWithDescriptor:renderPipelineDescriptor error:nil];
+        _defaultRenderPipelineState = [_device newRenderPipelineStateWithDescriptor:renderPipelineDescriptor error:&error];
+        if (!_defaultRenderPipelineState) {
+            NSLog(@"YYEVA: defaultRenderPipelineState creation failed: %@", error);
+        }
     }
     return _defaultRenderPipelineState;
 }
@@ -664,7 +687,12 @@ extern vector_float3 kColorConversion601FullRangeOffset;
 - (id<MTLRenderPipelineState>)bgRenderPipelineState
 {
     if (!_bgRenderPipelineState) {
-        id<MTLLibrary> library = [_device newLibraryWithFile:[self metalFilePath] error:nil];
+        NSError *error = nil;
+        id<MTLLibrary> library = [_device newLibraryWithFile:[self metalFilePath] error:&error];
+        if (!library) {
+            NSLog(@"YYEVA: bgRenderPipelineState failed to load metallib: %@", error);
+            return nil;
+        }
         id<MTLFunction> vertexFunction = [library newFunctionWithName:@"bgVertexShader"];
         id<MTLFunction> fragmentFunction = [library newFunctionWithName:@"bgFragmentSharder"];
         
@@ -672,7 +700,10 @@ extern vector_float3 kColorConversion601FullRangeOffset;
         renderPipelineDescriptor.vertexFunction = vertexFunction;
         renderPipelineDescriptor.fragmentFunction = fragmentFunction;
         renderPipelineDescriptor.colorAttachments[0].pixelFormat = _mtkView.colorPixelFormat;
-        _bgRenderPipelineState = [_device newRenderPipelineStateWithDescriptor:renderPipelineDescriptor error:nil];
+        _bgRenderPipelineState = [_device newRenderPipelineStateWithDescriptor:renderPipelineDescriptor error:&error];
+        if (!_bgRenderPipelineState) {
+            NSLog(@"YYEVA: bgRenderPipelineState creation failed: %@", error);
+        }
     }
     return _bgRenderPipelineState;
 }

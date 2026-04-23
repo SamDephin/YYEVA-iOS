@@ -39,7 +39,10 @@ extern vector_float3 kColorConversion601FullRangeOffset;
 
 - (void)dealloc
 {
-    CFRelease(_textureCache);
+    if (_textureCache != NULL) {
+        CFRelease(_textureCache);
+        _textureCache = NULL;
+    }
 }
 
 - (instancetype)initWithMetalView:(MTKView *)mtkView
@@ -101,7 +104,12 @@ extern vector_float3 kColorConversion601FullRangeOffset;
     NSBundle *swiftPMBundle = SWIFTPM_MODULE_BUNDLE;
     filePath = [swiftPMBundle pathForResource:@"default" ofType:@"metallib"];
 #endif
-    _library = [_device newLibraryWithFile:filePath error:nil];
+    NSError *libraryError = nil;
+    _library = [_device newLibraryWithFile:filePath error:&libraryError];
+    if (!_library) {
+        NSLog(@"YYEVA: AlphaRender failed to load metallib: %@", libraryError);
+        return;
+    }
     id<MTLFunction> vertexFunction = [_library newFunctionWithName:@"normalVertexShader"];
     id<MTLFunction> fragmentFunction1 = [_library newFunctionWithName:@"LCRGFragmentSharder"];
     id<MTLFunction> fragmentFunction2 = [_library newFunctionWithName:@"LGRCFragmentSharder"];
@@ -116,7 +124,11 @@ extern vector_float3 kColorConversion601FullRangeOffset;
     [self.fragmentFunctionDict setObject:fragmentFunction5 forKey:@"AHTRFragmentSharder"];
 
     MTLRenderPipelineDescriptor *renderPipelineDescriptor = [self getRenderPipelineDescriptorWithVertexFunction:vertexFunction FragmentFunction:fragmentFunction1];
-    _renderPipelineState = [_device newRenderPipelineStateWithDescriptor:renderPipelineDescriptor error:nil];
+    NSError *pipelineError = nil;
+    _renderPipelineState = [_device newRenderPipelineStateWithDescriptor:renderPipelineDescriptor error:&pipelineError];
+    if (!_renderPipelineState) {
+        NSLog(@"YYEVA: AlphaRender pipeline creation failed: %@", pipelineError);
+    }
     
     _commandQueue = [_device newCommandQueue];
 }

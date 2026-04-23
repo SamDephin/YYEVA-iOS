@@ -73,7 +73,7 @@ CGRect getFrame(NSArray *arry)
         1.0, 0.0
     };
      
-    static float vertexData[vertexDataLength];
+    float vertexData[vertexDataLength];
     int indexForVertexData = 0;
     //顶点数据+纹理坐标+遮罩纹理坐标
     for (int i = 0; i < 16; i ++) {

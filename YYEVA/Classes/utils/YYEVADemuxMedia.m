@@ -109,6 +109,8 @@
         return data;
     }
     
+    static const NSUInteger kMaxDecompressedSize = 50 * 1024 * 1024;
+    
     unsigned full_length = (unsigned)[data length];
     unsigned half_length = (unsigned)[data length] / 2;
     
@@ -128,7 +130,12 @@
     }
     
     while (!done) {
-        // Make sure we have enough room and reset the lengths.
+        if (strm.total_out >= kMaxDecompressedSize) {
+            NSLog(@"YYEVA: zlib decompression exceeded max size limit (%lu bytes)", (unsigned long)kMaxDecompressedSize);
+            inflateEnd(&strm);
+            return nil;
+        }
+        
         if (strm.total_out >= [decompressed length]) {
             [decompressed increaseLengthBy: half_length];
         }
@@ -136,7 +143,6 @@
         strm.next_out = [decompressed mutableBytes] + strm.total_out;
         strm.avail_out = (uInt)([decompressed length] - strm.total_out);
         
-        // Inflate another chunk.
         status = inflate (&strm, Z_SYNC_FLUSH);
         if (status == Z_STREAM_END) {
             done = YES;
@@ -149,7 +155,6 @@
         return nil;
     }
     
-    // Set real length.
     if (done) {
         [decompressed setLength: strm.total_out];
         return [NSData dataWithData: decompressed];

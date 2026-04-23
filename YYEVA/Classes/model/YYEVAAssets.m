@@ -11,12 +11,15 @@
 #import "YSVideoMetalUtils.h"
 #import <AVFoundation/AVFoundation.h>
 #import "YYEVARegionChecker.h"
+#import <pthread.h>
 
 #define kSampleBufferQueueMaxCapacity 3
+#define kMaxDecompressionSize (50 * 1024 * 1024)
 
 @interface YYEVAAssets() <AVAudioPlayerDelegate>
 {
     CFMutableArrayRef _sampleBufferQueue;
+    pthread_mutex_t _bufferMutex;
 }
 @property (nonatomic, strong) dispatch_queue_t readVideoBufferQueue;
 @property (nonatomic, strong) AVAssetReader *reader;
@@ -56,9 +59,9 @@
         _filePath = filePath;
         _demuxer = [[YYEVADemuxMedia alloc] init];
         _regionChecker = [[YYEVARegionChecker alloc] init];
-        //解析fileUrl
         _readVideoBufferQueue = dispatch_queue_create("com.yy.eva.ReadBufferQueue", DISPATCH_QUEUE_SERIAL);
         _sampleBufferQueue = CFArrayCreateMutable(kCFAllocatorDefault, 0, NULL);
+        pthread_mutex_init(&_bufferMutex, NULL);
     }
     return self;
 }
@@ -214,11 +217,17 @@
     }
     
     if (CGSizeEqualToSize(self.rgbSize, CGSizeZero)) {
-        self.rgbSize = CGSizeMake(assetTrack.naturalSize.width / 2, assetTrack.naturalSize.height);
+        CGFloat naturalWidth = assetTrack.naturalSize.width;
+        CGFloat naturalHeight = assetTrack.naturalSize.height;
+        if (naturalWidth > 0 && naturalHeight > 0) {
+            self.rgbSize = CGSizeMake(naturalWidth / 2, naturalHeight);
+        }
         
         if (self.region == YYEVAColorRegion_AlphaMP4_TopGrayBottomColor ||
                    self.region == YYEVAColorRegion_AlphaMP4_TopColorBottomGray) {
-            self.rgbSize = CGSizeMake(assetTrack.naturalSize.width, assetTrack.naturalSize.height/2);
+            if (naturalWidth > 0 && naturalHeight > 0) {
+                self.rgbSize = CGSizeMake(naturalWidth, naturalHeight/2);
+            }
         }
     }
      
@@ -242,10 +251,12 @@
         return;
     }
     
-    @synchronized (self) {
-        if (CFArrayGetCount(self->_sampleBufferQueue) > kSampleBufferQueueMaxCapacity) {
-            return;
-        }
+    pthread_mutex_lock(&_bufferMutex);
+    BOOL atCapacity = CFArrayGetCount(self->_sampleBufferQueue) > kSampleBufferQueueMaxCapacity;
+    pthread_mutex_unlock(&_bufferMutex);
+    
+    if (atCapacity) {
+        return;
     }
     
    dispatch_async(_readVideoBufferQueue, ^{
@@ -256,11 +267,12 @@
            }
            
            if (sampleBufferRef) {
-               @synchronized (self) {
-                   CFArrayAppendValue(self->_sampleBufferQueue, sampleBufferRef);
-                   if(CFArrayGetCount(self->_sampleBufferQueue) > kSampleBufferQueueMaxCapacity){
-                       break;
-                   }
+               pthread_mutex_lock(&self->_bufferMutex);
+               CFArrayAppendValue(self->_sampleBufferQueue, sampleBufferRef);
+               BOOL shouldBreak = CFArrayGetCount(self->_sampleBufferQueue) > kSampleBufferQueueMaxCapacity;
+               pthread_mutex_unlock(&self->_bufferMutex);
+               if (shouldBreak) {
+                   break;
                }
            } else {
                break;
@@ -272,33 +284,39 @@
 - (BOOL)hasNextSampleBuffer
 {
    BOOL hasNext = NO;
-   @synchronized (self) {
-       hasNext = CFArrayGetCount(self->_sampleBufferQueue) > 0 || self.reader.status == AVAssetReaderStatusReading;
-   }
+   pthread_mutex_lock(&_bufferMutex);
+   hasNext = CFArrayGetCount(self->_sampleBufferQueue) > 0 || self.reader.status == AVAssetReaderStatusReading;
+   pthread_mutex_unlock(&_bufferMutex);
    return hasNext;
 }
 
 - (CMSampleBufferRef)nextSampleBuffer
 {
    CMSampleBufferRef ref = NULL;
-   @synchronized (self) {
-       if (self->_sampleBufferQueue) {
-           if (CFArrayGetCount(self->_sampleBufferQueue) > 0) {
-               ref = (CMSampleBufferRef)CFArrayGetValueAtIndex(self->_sampleBufferQueue, 0);
-               CFArrayRemoveValueAtIndex(self->_sampleBufferQueue, 0);
-               _frameIndex++;
-               
-               //第一帧读取代表开始
-               if (_frameIndex == 0) {
-                   if ([self.delegate respondsToSelector:@selector(assetsDidStart:)]) {
-                       [self.delegate assetsDidStart:self];
-                   }
-               }
-               
-               if (self.delegate && [self.delegate respondsToSelector:@selector(assets:onPlayFrame:frameCount:)]) {
-                   [self.delegate assets:self onPlayFrame:_frameIndex frameCount:_frameCount];
-               }
+   NSInteger localFrameIndex = -1;
+   NSUInteger localFrameCount = 0;
+   
+   pthread_mutex_lock(&_bufferMutex);
+   if (self->_sampleBufferQueue) {
+       if (CFArrayGetCount(self->_sampleBufferQueue) > 0) {
+           ref = (CMSampleBufferRef)CFArrayGetValueAtIndex(self->_sampleBufferQueue, 0);
+           CFArrayRemoveValueAtIndex(self->_sampleBufferQueue, 0);
+           _frameIndex++;
+           localFrameIndex = _frameIndex;
+           localFrameCount = _frameCount;
+       }
+   }
+   pthread_mutex_unlock(&_bufferMutex);
+   
+   if (localFrameIndex >= 0) {
+       if (localFrameIndex == 0) {
+           if ([self.delegate respondsToSelector:@selector(assetsDidStart:)]) {
+               [self.delegate assetsDidStart:self];
            }
+       }
+       
+       if (self.delegate && [self.delegate respondsToSelector:@selector(assets:onPlayFrame:frameCount:)]) {
+           [self.delegate assets:self onPlayFrame:localFrameIndex frameCount:localFrameCount];
        }
    }
    
@@ -309,12 +327,13 @@
 
 - (void)clear
 {
-    //同步执行
     dispatch_sync(_readVideoBufferQueue, ^{
         if (self.reader && self.reader.status == AVAssetReaderStatusReading) {
             [self.reader cancelReading];
         }
+        pthread_mutex_lock(&self->_bufferMutex);
         if (self->_sampleBufferQueue == NULL) {
+            pthread_mutex_unlock(&self->_bufferMutex);
             return;
         }
         NSInteger count = CFArrayGetCount(self->_sampleBufferQueue);
@@ -329,15 +348,17 @@
             }
         }
         CFArrayRemoveAllValues(self->_sampleBufferQueue);
+        pthread_mutex_unlock(&self->_bufferMutex);
     });
 }
 
 - (void)dealloc
 {
-    if (self->_sampleBufferQueue!=NULL) {
+    if (self->_sampleBufferQueue != NULL) {
         CFRelease(self->_sampleBufferQueue);
     }
     self->_sampleBufferQueue = NULL;
+    pthread_mutex_destroy(&_bufferMutex);
     if (self.audioPlayer && [self.audioPlayer isPlaying]) {
         [self.audioPlayer stop];
     }

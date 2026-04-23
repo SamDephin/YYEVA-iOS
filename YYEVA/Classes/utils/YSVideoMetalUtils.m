@@ -104,7 +104,7 @@ void normalVerticesWithFillMod(CGRect rect,
     CGFloat picRealWidth = picW;
     CGFloat picRealHeight = picH;
     
-    fillMode = YYEVAEffectSourceImageFillModeAspectFit;
+    //fillMode used as-is from parameter
     switch (fillMode) {
         case YYEVAEffectSourceImageFillModeScaleFill:
             widthPicScaling = 1.0;

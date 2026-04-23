@@ -188,12 +188,18 @@
     self.videoRender.completionPlayBlock = ^{
         weakSelf.isFirstPlay = NO;
         if (weakSelf.loop) {
+            if ([weakSelf.delegate respondsToSelector:@selector(evaPlayer:didLoopCompletedWithRemainingCount:)]) {
+                [weakSelf.delegate evaPlayer:weakSelf didLoopCompletedWithRemainingCount:0];
+            }
             [weakSelf.assets reload];
             [weakSelf timerStart];
         } else {
             [weakSelf timerEnd];
             weakSelf.repeatCount--;
             if (weakSelf.repeatCount > 0) {
+                if ([weakSelf.delegate respondsToSelector:@selector(evaPlayer:didLoopCompletedWithRemainingCount:)]) {
+                    [weakSelf.delegate evaPlayer:weakSelf didLoopCompletedWithRemainingCount:weakSelf.repeatCount];
+                }
                 [weakSelf.assets reload];
                 [weakSelf timerStart];
             } else {

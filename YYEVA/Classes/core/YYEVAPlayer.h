@@ -25,8 +25,11 @@ NS_ASSUME_NONNULL_BEGIN
 // 每次开始播放都会回调，isRestart为NO代表首次播放，YES代表非首次播放
 - (void)evaPlayerDidStart:(YYEVAPlayer *)player isRestart:(BOOL)isRestart;
 
-// 播放结束
+// 播放结束（全部播放完成）
 - (void)evaPlayerDidCompleted:(YYEVAPlayer *)player;
+
+// 每轮播放结束回调（repeatCount > 1 时，每轮播放结束都会触发，remainingCount 为剩余播放次数）
+- (void)evaPlayer:(YYEVAPlayer *)player didLoopCompletedWithRemainingCount:(NSInteger)remainingCount;
 
 // 播放失败
 - (void)evaPlayer:(YYEVAPlayer *)player playFail:(NSError *)error;

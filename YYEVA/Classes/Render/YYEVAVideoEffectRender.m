@@ -468,6 +468,10 @@ extern vector_float3 kColorConversion601FullRangeOffset;
     if (!image) {
         return nil;
     }
+    if (trueSize.width <= 0 || trueSize.height <= 0 ||
+        containerSize.width <= 0 || containerSize.height <= 0) {
+        return nil;
+    }
     if (@available(iOS 10.0, *)) {
         MTKTextureLoader *loader = [[MTKTextureLoader alloc] initWithDevice:device];
         NSError *error = nil;
@@ -495,6 +499,10 @@ extern vector_float3 kColorConversion601FullRangeOffset;
                 break;
         }
         
+        if (realWidth <= 0 || realHeight <= 0 || isnan(realWidth) || isnan(realHeight)) {
+            return nil;
+        }
+        
         switch (fillMode) {
             case YYEVAEffectSourceImageFillModeAspectFit:
             {
@@ -510,15 +518,17 @@ extern vector_float3 kColorConversion601FullRangeOffset;
 
             case YYEVAEffectSourceImageFillModeAspectFill:
             {
+                if (image.size.width <= 0 || image.size.height <= 0) {
+                    break;
+                }
                 UIGraphicsBeginImageContextWithOptions(CGSizeMake(realWidth, realHeight), NO, [UIScreen mainScreen].scale);
                 CGContextRef fillContext = UIGraphicsGetCurrentContext();
                 CGContextSaveGState(fillContext);
                 CGContextClipToRect(fillContext, CGRectMake(0, 0, realWidth, realHeight));
                 // Calculate AspectFill rect: scale to fill, center, crop excess
                 CGFloat imageAspect = image.size.width / image.size.height;
-                CGFloat targetAspect = realWidth / realHeight;
                 CGRect drawRect;
-                if (imageAspect > targetAspect) {
+                if (imageAspect > realWidth / realHeight) {
                     // Image is wider — match height, crop sides
                     CGFloat scaledWidth = realHeight * imageAspect;
                     drawRect = CGRectMake((realWidth - scaledWidth) / 2.0, 0, scaledWidth, realHeight);
@@ -538,7 +548,7 @@ extern vector_float3 kColorConversion601FullRangeOffset;
                 break;
         }
         
-          
+        
         id<MTLTexture> texture = [loader newTextureWithCGImage:image.CGImage options:@{MTKTextureLoaderOptionOrigin : MTKTextureLoaderOriginFlippedVertically} error:&error];
         if (!texture || error) {
             return nil;
